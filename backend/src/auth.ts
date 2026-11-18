@@ -8,7 +8,11 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 }
 
 export function createToken(user: { id: number; username: string }) {
-  return jwt.sign({ sub: user.id, username: user.username }, JWT_SECRET);
+  return jwt.sign(
+    { sub: user.id, username: user.username },
+    JWT_SECRET,
+    { expiresIn: '2h' },
+  );
 }
 
 @Injectable()

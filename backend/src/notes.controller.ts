@@ -6,6 +6,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  ParseIntPipe,
   Post,
   Query,
   Req,
@@ -17,28 +18,28 @@ import { DbService } from './db.service';
 @Controller('notes')
 @UseGuards(AuthGuard)
 export class NotesController {
-  constructor(private db: DbService) {}
+  constructor(private db: DbService) { }
 
   // Notițele mele, cu căutare după titlu
   @Get()
   // Notițele mele, cu căutare după conținut
-@Get()
-async list(@Req() req, @Query('search') search: string = '') {
-  if (typeof search !== 'string' || search.length > 30) {
-    throw new BadRequestException(
-      'Textul de căutare trebuie să aibă maximum 30 de caractere',
-    );
-  }
+  @Get()
+  async list(@Req() req, @Query('search') search: string = '') {
+    if (typeof search !== 'string' || search.length > 30) {
+      throw new BadRequestException(
+        'Textul de căutare trebuie să aibă maximum 30 de caractere',
+      );
+    }
 
-  const result = await this.db.query(
-    `SELECT id, title, content, is_public, created_at FROM notes
+    const result = await this.db.query(
+      `SELECT id, title, content, is_public, created_at FROM notes
      WHERE user_id = $1 AND content ILIKE $2
      ORDER BY id DESC`,
-    [req.user.sub, `%${search}%`],
-  );
+      [req.user.sub, `%${search}%`],
+    );
 
-  return result.rows;
-}
+    return result.rows;
+  }
 
   // Notițele publice ale tuturor utilizatorilor
   @Get('public')
@@ -52,14 +53,16 @@ async list(@Req() req, @Query('search') search: string = '') {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
+  async get(@Req() req, @Param('id', ParseIntPipe) id: number) {
     const result = await this.db.query(
-      'SELECT id, title, content, is_public, created_at FROM notes WHERE id = $1',
-      [id],
+      'SELECT id, title, content, is_public, created_at FROM notes WHERE id = $1 AND user_id = $2',
+      [id, req.user.sub],
     );
+
     if (result.rows.length === 0) {
       throw new NotFoundException('Notița nu există');
     }
+
     return result.rows[0];
   }
 
@@ -67,6 +70,11 @@ async list(@Req() req, @Query('search') search: string = '') {
   async create(@Req() req, @Body() body: { title: string; content: string; isPublic?: boolean }) {
     if (!body.title || !body.content) {
       throw new BadRequestException('Completează titlul și conținutul');
+    }
+    if (typeof body.content !== 'string' || body.content.length > 2000) {
+      throw new BadRequestException(
+        'Conținutul notiței nu poate depăși 2000 de caractere',
+      );
     }
     const result = await this.db.query(
       `INSERT INTO notes (user_id, title, content, is_public) VALUES ($1, $2, $3, $4)
@@ -77,8 +85,16 @@ async list(@Req() req, @Query('search') search: string = '') {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    await this.db.query('DELETE FROM notes WHERE id = $1', [id]);
+  async remove(@Req() req, @Param('id', ParseIntPipe) id: number) {
+    const result = await this.db.query(
+      'DELETE FROM notes WHERE id = $1 AND user_id = $2',
+      [id, req.user.sub],
+    );
+
+    if (result.rowCount === 0) {
+      throw new NotFoundException('Notița nu există');
+    }
+
     return { deleted: true };
   }
 }

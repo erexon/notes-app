@@ -21,18 +21,24 @@ export class NotesController {
 
   // Notițele mele, cu căutare după titlu
   @Get()
-  async list(@Req() req, @Query('search') search = '') {
-    try {
-      const result = await this.db.query(
-        `SELECT id, title, content, is_public, created_at FROM notes
-         WHERE user_id = ${req.user.sub} AND title ILIKE '%${search}%'
-         ORDER BY id DESC`,
-      );
-      return result.rows;
-    } catch (err) {
-      throw new BadRequestException(err.message);
-    }
+  // Notițele mele, cu căutare după conținut
+@Get()
+async list(@Req() req, @Query('search') search: string = '') {
+  if (typeof search !== 'string' || search.length > 30) {
+    throw new BadRequestException(
+      'Textul de căutare trebuie să aibă maximum 30 de caractere',
+    );
   }
+
+  const result = await this.db.query(
+    `SELECT id, title, content, is_public, created_at FROM notes
+     WHERE user_id = $1 AND content ILIKE $2
+     ORDER BY id DESC`,
+    [req.user.sub, `%${search}%`],
+  );
+
+  return result.rows;
+}
 
   // Notițele publice ale tuturor utilizatorilor
   @Get('public')
